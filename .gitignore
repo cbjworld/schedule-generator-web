@@ -1,0 +1,6 @@
+node_modules/
+.playwright-cli/
+*.tar
+*.zip
+.env*
+rotation_state.json

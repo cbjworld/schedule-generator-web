@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#a84c6a"><meta name="description" content="평일과 주말 근무를 순번대로 배정하고 달력형 엑셀로 저장하세요. 명단은 내 브라우저에만 보관됩니다."><link rel="icon" href="favicon.svg" type="image/svg+xml"><title>차례 — 근무표 생성기</title><link rel="stylesheet" href="style.css"><script src="vendor/exceljs.min.js" defer></script><script type="module" src="app.js"></script></head>
+<body>
+<header class="topbar"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">▦</span> 차례 <span class="brand-sub">근무표 생성기</span></a><span class="local-badge"><i></i> 내 브라우저에만 저장</span></header>
+<main>
+<section class="intro"><div><p class="eyebrow">A LITTLE ORDER, EVERY MONTH</p><h1>이번 달 근무도,<br class="mobile-break"> 차례대로.</h1><p>명단을 넣고, 날짜를 확인하고, 엑셀로 간편하게.</p></div><div class="intro-note">복잡한 배정은 줄이고<br><strong>한 달의 여유를 더하세요.</strong></div></section>
+<div class="workspace">
+<aside class="settings"><form id="settings">
+<div class="section-heading"><span class="step">01</span><h2>기본 설정</h2></div>
+<label for="title">배정표 제목</label><input id="title" name="title" value="보안근무자" maxlength="100">
+<div class="fields"><div><label for="year">연도</label><input id="year" name="year" type="number" min="2000" max="2050" required></div><div><label for="month">월</label><select id="month" name="month" aria-label="월"></select></div><div><label for="group_size">하루 인원</label><input id="group_size" name="group_size" type="number" min="1" max="100" value="2" required></div></div>
+<label for="mode">운영 방식</label><select id="mode" name="mode"><option value="weekday">평일만 배정</option><option value="weekend">주말·공휴일만 배정</option><option value="separate">평일·주말 각각 다른 명단</option><option value="shared">같은 명단, 평일·주말 별도 순번</option><option value="integrated">매일 통합 순번</option></select><p class="hint" id="mode-hint">토요일, 일요일, 공휴일을 제외한 평일에 배정합니다.</p>
+<div class="section-heading divider"><span class="step">02</span><h2>근무자 순번</h2></div>
+<div id="weekday-fields"><label for="weekday" id="weekday-label">평일 근무자</label><textarea id="weekday" name="weekday" rows="3" placeholder="예: 김하늘, 이봄, 박여름, 최가을"></textarea><label class="small-label" for="start_weekday">시작할 이름 또는 순번</label><input id="start_weekday" name="start_weekday" placeholder="비워두면 이전 순번에서 이어서"><p class="hint" id="weekday-hint"></p></div>
+<div id="weekend-fields" hidden><label for="weekend" id="weekend-label">주말·공휴일 근무자</label><textarea id="weekend" name="weekend" rows="3" placeholder="근무할 순서대로 입력하세요"></textarea><label class="small-label" for="start_weekend">시작할 이름 또는 순번</label><input id="start_weekend" name="start_weekend" placeholder="비워두면 이전 순번에서 이어서"><p class="hint" id="weekend-hint"></p></div>
+<div id="shared-start" hidden><label for="shared_weekday_start">평일 시작 이름 또는 순번</label><input id="shared_weekday_start" placeholder="비워두면 평일 순번에서 이어서"><p class="hint">같은 명단을 사용하되 평일과 주말 순번은 각각 진행합니다.</p></div>
+<p class="hint">쉼표 · 띄어쓰기 · 줄바꿈 · 하이픈으로 이름을 구분하세요.</p>
+<div class="section-heading divider"><span class="step">03</span><h2>예외 날짜</h2></div>
+<div class="fields two"><div><label for="excluded">미운영일</label><input id="excluded" name="excluded" placeholder="예: 5, 12"></div><div><label for="additional">추가근무일</label><input id="additional" name="additional" placeholder="예: 7, 14"></div></div>
+<p class="hint">미운영일은 순번을 건너뛰지 않습니다. 추가근무일은 선택한 운영 방식의 명단으로 배정합니다.</p>
+<details><summary>공휴일 보정</summary><label for="extra_holidays">임시공휴일 추가</label><input id="extra_holidays" name="extra_holidays" placeholder="예: 2"><p class="hint">새로 지정된 임시공휴일을 입력하세요. 공휴일 자료: 2000–2050년, python-holidays 0.106.</p></details>
+<button type="submit" class="primary generate">배정표 미리보기 <span aria-hidden="true">↗</span></button>
+</form><div class="backup-tools"><button id="backup" type="button">설정 백업</button><button id="import-button" type="button">백업 불러오기</button><input id="import-file" type="file" accept=".json,application/json" hidden></div><p class="privacy">입력한 이름과 순번은 이 기기의 브라우저에 보관됩니다. 다른 기기에서는 백업 파일을 불러오세요.</p></aside>
+<section class="result" aria-label="근무표 미리보기"><div class="calendar-toolbar"><div><p class="eyebrow">MONTHLY SCHEDULE</p><h2 id="calendar-title"></h2></div><div class="month-nav"><button id="prev" aria-label="이전 달" type="button">‹</button><button id="today" type="button">이번 달</button><button id="next" aria-label="다음 달" type="button">›</button></div></div>
+<div id="message" role="status" aria-live="polite"></div><div class="metrics"><div><span>배정일</span><strong id="assigned-count">—<small>일</small></strong></div><div><span>참여 인원</span><strong id="people-count">—<small>명</small></strong></div><div><span>미운영일</span><strong id="closed-count">—<small>일</small></strong></div><div class="metric-caption">한눈에 보는<br><b>우리의 한 달</b><span aria-hidden="true">✳</span></div></div>
+<div class="calendar-scroll"><table class="calendar" id="calendar"><caption class="sr-only">월간 근무자 배정표</caption><thead><tr><th scope="col">일</th><th scope="col">월</th><th scope="col">화</th><th scope="col">수</th><th scope="col">목</th><th scope="col">금</th><th scope="col">토</th></tr></thead><tbody id="calendar-body"></tbody></table></div>
+<div class="calendar-footer"><div class="legend"><span><i class="rose"></i>일요일·공휴일</span><span><i class="blue"></i>토요일</span><span><i class="gray"></i>미운영</span></div><span id="preview-label">명단을 입력하면 배정이 표시됩니다</span></div>
+<div class="actions"><div><h3>한 달의 준비, 끝.</h3><p>미리보기와 다운로드는 순번을 변경하지 않습니다.</p></div><button id="download" type="button" class="primary" disabled>엑셀 다운로드 <span aria-hidden="true">↓</span></button></div>
+<div class="continuation"><div><h3>다음 달도 이어서</h3><p id="next-hint">배정을 확인한 뒤 순번을 확정해 주세요.</p></div><button id="confirm" type="button" class="secondary" disabled>순번 확정 · 다음 달 →</button></div>
+<details class="help"><summary>사용 방법과 순번 저장 안내</summary><p>1. 운영 방식과 근무자 명단을 입력합니다.<br>2. 달력에서 날짜별 배정을 확인하고 엑셀을 내려받습니다.<br>3. 최종 배정이 맞으면 ‘순번 확정 · 다음 달’을 누릅니다. 다음 달의 첫 근무자가 자동으로 이어집니다.</p><p>반복 미리보기와 다운로드로 순번이 중복 진행되지 않습니다. 명단의 순서를 바꾸면 해당 명단은 첫 번째부터 다시 시작합니다. 기존 PC 프로그램의 rotation_state.json도 불러올 수 있습니다.</p><p>공휴일은 배포에 포함된 자료로 계산합니다. 이후 지정되는 임시공휴일은 ‘공휴일 보정’에 추가해 주세요. 브라우저 데이터를 지우면 저장된 설정도 삭제되므로 백업을 보관하세요.</p></details>
+</section></div><footer class="site-footer"><span>차례 <span class="dot">·</span> 조금 더 가벼운 근무표 만들기</span><a href="https://github.com/cbjworld/schedule-generator-web" target="_blank" rel="noopener">GitHub ↗</a></footer>
+</main><noscript>이 근무표 생성기는 자바스크립트를 활성화해야 사용할 수 있습니다.</noscript>
+</body></html>
+

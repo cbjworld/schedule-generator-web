@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ExcelJS from 'exceljs';
+import {generate,parseDays,resolveStart,inputFromState} from '../dist/engine.js';
+import {makeWorkbook} from '../dist/excel.js';
+const holidays=JSON.parse(await readFile(new URL('../dist/holidays.json',import.meta.url),'utf8'));
+const fixtures=JSON.parse(await readFile(new URL('./original-fixtures.json',import.meta.url),'utf8'));
+const base={year:2026,month:10,title:'보안근무자',group_size:2,mode:'integrated',weekday:'가, 나, 다, 라, 마',weekend:'봄, 여름, 가을, 겨울'};
+for(const f of fixtures)test(`원본 일치 ${f.input.year}-${f.input.month} ${f.input.mode}`,()=>{const r=generate(f.input,holidays);const actual=Object.fromEntries(r.days.filter(d=>d.target).map(d=>[d.date,d.closed?'(미운영)':d.workers]));assert.deepEqual(actual,f.assignments);assert.equal(r.next.start_index_weekday,f.nextWeekday);assert.equal(r.next.start_index_weekend,f.nextWeekend);});
+test('미운영일은 순번을 소비하지 않고 추가일보다 우선',()=>{const r=generate({...base,excluded:'1',additional:'1'},holidays);assert.equal(r.days[0].closed,true);assert.deepEqual(r.days[1].workers,['가','나']);});
+test('미리보기 반복은 동일, 다음 달 확정 후 이어짐',()=>{const a=generate(base,holidays);assert.deepEqual(generate(base,holidays),a);const b=generate({...base,month:11},holidays,a.next);assert.equal(b.days[0].workers[0],a.weekday[a.next.start_index_weekday]);const c=generate({...base,month:11,weekday:'마,라,다,나,가'},holidays,a.next);assert.equal(c.days[0].workers[0],'마');});
+test('공휴일, 윤년, 임시공휴일 반영',()=>{assert.equal(generate({...base,year:2024,month:2},holidays).days.length,29);const r=generate({...base,mode:'weekday',extra_holidays:'2'},holidays);assert.equal(r.days[1].holiday,'추가 공휴일');assert.deepEqual(r.days[1].workers,[]);assert.ok(r.days[8].holiday);assert.deepEqual(r.days[8].workers,[]);});
+test('잘못된 입력을 거부',()=>{for(const patch of [{year:2051},{month:0},{group_size:0},{group_size:6},{weekday:'가,가'},{excluded:'32'},{additional:'hello'},{start_weekday:'없는이름'},{start_weekday:'0'},{mode:'unknown'}])assert.throws(()=>generate({...base,...patch},holidays));assert.throws(()=>parseDays('1,2.5',31));assert.equal(resolveStart('다',['가','나','다']),2);});
+test('기존 PC 백업과 연말 다음 달 지원',()=>{const r=generate({...base,month:12},holidays);const v=inputFromState(r.next);assert.equal(v.year,2027);assert.equal(v.month,1);assert.equal(v.mode,'integrated');assert.throws(()=>inputFromState({...r.next,start_index_weekday:-1}));});
+test('엑셀 파일 다시 열기, 서식과 수식 문자 안전성',async()=>{const r=generate({...base,weekday:'=SUM(A1:A2), 정상',group_size:1},holidays);const wb=makeWorkbook(ExcelJS,r);const bytes=await wb.xlsx.writeBuffer();const reopened=new ExcelJS.Workbook();await reopened.xlsx.load(bytes);const ws=reopened.getWorksheet('10월');assert.equal(ws.getCell('A1').value,'2026년 10월 보안근무자');assert.equal(ws.getCell('E4').value,'=SUM(A1:A2)');assert.equal(ws.getCell('E4').type,ExcelJS.ValueType.String);assert.equal(ws.getCell('E4').fill.fgColor.argb,'FFFFF2CC');assert.equal(ws.pageSetup.fitToWidth,1);});
